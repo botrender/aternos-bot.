@@ -1,79 +1,95 @@
-import asyncio
 import os
-from threading import Thread
-import discord
-from discord.ext import commands
+import threading
 from flask import Flask
-from python_aternos import Client
+from discord.ext import commands
+import discord
+from aternos import Client
 
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-ATERNOS_USER = os.getenv("ATERNOS_USER")
-ATERNOS_PASSWORD = os.getenv("ATERNOS_PASSWORD")
+# --- НАСТРОЙКА FLASK ДЛЯ RENDER ---
+app = Flask('')
 
-# --- Веб-сервер для Render (чтобы не было ошибки портов) ---
-app = Flask("")
-
-
-@app.route("/")
+@app.route('/')
 def home():
-  return "Bot is running!"
+    return "Aternos Discord Bot is running!"
 
+def run_flask():
+    app.run(host='0.0.0.0', port=10000)
 
-def run_web():
-  # Render автоматически передает порт через переменную окружения PORT
-  port = int(os.environ.get("PORT", 8080))
-  app.run(host="0.0.0.0", port=port)
+def keep_alive():
+    t = threading.Thread(target=run_flask)
+    t.start()
 
-
-# --- Логика Discord бота ---
+# --- НАСТРОЙКА DISCORD БОТА ---
 intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+intents.message_content = True  # Обязательно для чтения команд!
 
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
-  print(f"✅ Бот {bot.user} успешно запущен и готов к работе!")
+    print(f'Бот авторизован в Discord как {bot.user}')
 
+@bot.command(name='status')
+async def status(ctx):
+    await ctx.send("Проверяю статус сервера...")
+    try:
+        session_cookie = os.getenv("ATERNOS_SESSION")
+        if not session_cookie:
+            await ctx.send("Ошибка: Не задана переменная ATERNOS_SESSION в Render!")
+            return
 
-@bot.command(name="start")
+        # Авторизация по куки для обхода Cloudflare
+        aternos = Client.from_minicookie(session_cookie)
+        servers = aternos.list_servers()
+        
+        if not servers:
+            await ctx.send("Не найдено ни одного сервера Aternos в этом аккаунте.")
+            return
+
+        server = servers[0] # Берем первый сервер из списка
+        
+        # Переводим статус на русский для удобства
+        status_text = {
+            'online': '🟢 Онлайн',
+            'offline': '🔴 Оффлайн',
+            'loading': '🟡 Запускается...',
+            'queuing': '⏳ В очереди...'
+        }.get(server.status, server.status)
+
+        await ctx.send(f"**Сервер:** {server.address}\n**Статус:** {status_text}\n**Игроки:** {server.players_count}/{server.slots}")
+    except Exception as e:
+        await ctx.send(f"Не удалось получить статус: {e}")
+
+@bot.command(name='start')
 async def start_server(ctx):
-  await ctx.send("⏳ Отправляю запрос на запуск сервера Aternos...")
-  try:
-    aternos = Client()
-    aternos.login(ATERNOS_USER, ATERNOS_PASSWORD)
-    servs = aternos.list_servers()
-    myserver = servs[0]
+    await ctx.send("Отправляю запрос на запуск сервера Aternos...")
+    try:
+        session_cookie = os.getenv("ATERNOS_SESSION")
+        if not session_cookie:
+            await ctx.send("Ошибка: Не задана переменная ATERNOS_SESSION в Render!")
+            return
 
-    myserver.start()
-    await ctx.send(
-        "🚀 Сервер **Ruslanis13** запускается! Ожидайте 1-3 минуты."
-    )
-  except Exception as e:
-    await ctx.send(f"❌ Ошибка при запуске: {e}")
+        aternos = Client.from_minicookie(session_cookie)
+        servers = aternos.list_servers()
+        
+        if not servers:
+            await ctx.send("Не найдено ни одного сервера Aternos.")
+            return
 
+        server = servers[0]
+        server.start()
+        await ctx.send("🚀 Запрос на запуск успешно отправлен! Сервер скоро включится.")
+    except Exception as e:
+        await ctx.send(f"Ошибка при запуске: {e}")
 
-@bot.command(name="status")
-async def server_status(ctx):
-  try:
-    aternos = Client()
-    aternos.login(ATERNOS_USER, ATERNOS_PASSWORD)
-    servs = aternos.list_servers()
-    myserver = servs[0]
-
-    status = myserver.status
-    await ctx.send(f"📊 Текущий статус сервера: **{status}**")
-  except Exception as e:
-    await ctx.send(f"❌ Не удалось получить статус: {e}")
-
-
+# --- ЗАПУСК ---
 if __name__ == "__main__":
-  # Запускаем веб-сервер в отдельном потоке
-  t = Thread(target=run_web)
-  t.start()
-
-  # Запускаем Discord-бота
-  if DISCORD_TOKEN:
-    bot.run(DISCORD_TOKEN)
-  else:
-    print("❌ Ошибка: Не найден DISCORD_TOKEN в переменных окружения!")
+    # Запускаем веб-сервер в отдельном потоке, чтобы Render видел открытый порт 10000
+    keep_alive()
+    
+    # Запуск Discord бота
+    DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+    if DISCORD_TOKEN:
+        bot.run(DISCORD_TOKEN)
+    else:
+        print("Ошибка: Не найден токен DISCORD_TOKEN в переменных окружения!")
