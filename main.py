@@ -1,3 +1,8 @@
+import sys
+import site
+# Принудительно подключаем директорию с установленными pip-пакетами
+sys.path.extend(site.getsitepackages())
+
 import os
 import threading
 from flask import Flask
@@ -21,7 +26,7 @@ def keep_alive():
 
 # --- НАСТРОЙКА DISCORD БОТА ---
 intents = discord.Intents.default()
-intents.message_content = True  # Обязательно для чтения команд!
+intents.message_content = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
@@ -38,7 +43,6 @@ async def status(ctx):
             await ctx.send("Ошибка: Не задана переменная ATERNOS_SESSION в Render!")
             return
 
-        # Авторизация по куки для обхода Cloudflare
         aternos = Client.from_minicookie(session_cookie)
         servers = aternos.list_servers()
         
@@ -46,9 +50,8 @@ async def status(ctx):
             await ctx.send("Не найдено ни одного сервера Aternos в этом аккаунте.")
             return
 
-        server = servers[0] # Берем первый сервер из списка
+        server = servers[0]
         
-        # Переводим статус на русский для удобства
         status_text = {
             'online': '🟢 Онлайн',
             'offline': '🔴 Оффлайн',
@@ -82,12 +85,9 @@ async def start_server(ctx):
     except Exception as e:
         await ctx.send(f"Ошибка при запуске: {e}")
 
-# --- ЗАПУСК ---
 if __name__ == "__main__":
-    # Запускаем веб-сервер в отдельном потоке, чтобы Render видел открытый порт 10000
     keep_alive()
     
-    # Запуск Discord бота
     DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
     if DISCORD_TOKEN:
         bot.run(DISCORD_TOKEN)
