@@ -1,13 +1,31 @@
 import asyncio
 import os
+from threading import Thread
 import discord
 from discord.ext import commands
+from flask import Flask
 from python_aternos import Client
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 ATERNOS_USER = os.getenv("ATERNOS_USER")
 ATERNOS_PASSWORD = os.getenv("ATERNOS_PASSWORD")
 
+# --- Веб-сервер для Render (чтобы не было ошибки портов) ---
+app = Flask("")
+
+
+@app.route("/")
+def home():
+  return "Bot is running!"
+
+
+def run_web():
+  # Render автоматически передает порт через переменную окружения PORT
+  port = int(os.environ.get("PORT", 8080))
+  app.run(host="0.0.0.0", port=port)
+
+
+# --- Логика Discord бота ---
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -22,7 +40,6 @@ async def on_ready():
 async def start_server(ctx):
   await ctx.send("⏳ Отправляю запрос на запуск сервера Aternos...")
   try:
-    # Исправленный способ авторизации через Client
     aternos = Client()
     aternos.login(ATERNOS_USER, ATERNOS_PASSWORD)
     servs = aternos.list_servers()
@@ -50,7 +67,13 @@ async def server_status(ctx):
     await ctx.send(f"❌ Не удалось получить статус: {e}")
 
 
-if DISCORD_TOKEN:
-  bot.run(DISCORD_TOKEN)
-else:
-  print("❌ Ошибка: Не найден DISCORD_TOKEN в переменных окружения!")
+if __name__ == "__main__":
+  # Запускаем веб-сервер в отдельном потоке
+  t = Thread(target=run_web)
+  t.start()
+
+  # Запускаем Discord-бота
+  if DISCORD_TOKEN:
+    bot.run(DISCORD_TOKEN)
+  else:
+    print("❌ Ошибка: Не найден DISCORD_TOKEN в переменных окружения!")
