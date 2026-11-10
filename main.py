@@ -4,7 +4,6 @@ import discord
 from discord.ext import commands
 from python_aternos import Client
 
-# --- СЕКРЕТНЫЕ ДАННЫЕ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ ---
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 ATERNOS_USER = os.getenv("ATERNOS_USER")
 ATERNOS_PASSWORD = os.getenv("ATERNOS_PASSWORD")
@@ -23,7 +22,9 @@ async def on_ready():
 async def start_server(ctx):
   await ctx.send("⏳ Отправляю запрос на запуск сервера Aternos...")
   try:
-    aternos = Client.from_credentials(ATERNOS_USER, ATERNOS_PASSWORD)
+    # Исправленный способ авторизации через Client
+    aternos = Client()
+    aternos.login(ATERNOS_USER, ATERNOS_PASSWORD)
     servs = aternos.list_servers()
     myserver = servs[0]
 
@@ -38,7 +39,8 @@ async def start_server(ctx):
 @bot.command(name="status")
 async def server_status(ctx):
   try:
-    aternos = Client.from_credentials(ATERNOS_USER, ATERNOS_PASSWORD)
+    aternos = Client()
+    aternos.login(ATERNOS_USER, ATERNOS_PASSWORD)
     servs = aternos.list_servers()
     myserver = servs[0]
 
