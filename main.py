@@ -3,7 +3,7 @@ import threading
 from flask import Flask
 from discord.ext import commands
 import discord
-from aternos import Client
+from pythonaternos import Client
 
 # --- НАСТРОЙКА FLASK ДЛЯ RENDER ---
 app = Flask('')
